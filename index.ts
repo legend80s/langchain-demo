@@ -1,5 +1,5 @@
 import { ChatOpenAI } from "@langchain/openai"
-import { createAgent, tool } from "langchain"
+import { createAgent, HumanMessage, tool } from "langchain"
 import * as z from "zod"
 
 async function main() {
@@ -13,14 +13,16 @@ async function main() {
   })
   const model = open
 
-  const msg = "What's the weather in Tokyo?"
+  const msg = new HumanMessage("What's the weather in Tokyo?")
 
   const getWeather = tool(
     ({ city }) => {
       console.log(`[get_weather] called with city=${city}`)
 
       // return 10 degrees Celsius and sunny in jiaxing
-      // if
+      if (city.toLowerCase() === "jiaxing") {
+        return "11 degrees Celsius and rainy."
+      }
 
       return `It's always sunny in ${city}!`
     },
@@ -40,19 +42,24 @@ async function main() {
   })
 
   const resp = await agent.invoke({
-    messages: [{ role: "user", content: msg }],
+    messages: [msg],
   })
-
-  console.log(
-    "resp content:",
-    resp.messages.map((x) => `|${x.content}|`),
-  )
-  console.log(
-    "resp text:",
-    resp.messages.map((x) => `|${x.text}|`),
-  )
+  // console.log("resp:", resp)
+  // console.log(
+  //   "resp content:",
+  //   resp.messages.map((x) => `|${x.content}|`),
+  // )
+  // console.log(
+  //   "resp text:",
+  //   resp.messages.map((x) => `|${x.text}|`),
+  // )
   console.log("\n---\nFinal output:")
-  console.log(resp.messages.map((x) => x.content).join("\n"))
+  console.log(
+    resp.messages
+      .filter((x) => x.type === "ai")
+      .map((x) => x.content)
+      .join("\n"),
+  )
 
   // let full: AIMessageChunk | null = null
 
