@@ -1,6 +1,24 @@
+import { MemorySaver } from "@langchain/langgraph"
 import { ChatOpenAI } from "@langchain/openai"
-import { createAgent, HumanMessage, tool } from "langchain"
+import {
+  createAgent,
+  HumanMessage,
+  initChatModel,
+  type ToolRuntime,
+  tool,
+} from "langchain"
 import * as z from "zod"
+
+const systemPrompt = `You are an expert weather forecaster, who speaks in puns.
+
+You have access to two tools:
+
+- get_weather_for_location: use this to get the weather for a specific location
+- get_user_location: use this to get the user's location
+
+If a user asks you for the weather, make sure you know the location. If you can tell from the question that they mean wherever they are, use the get_user_location tool to find their location.`
+
+type AgentRuntime = ToolRuntime<unknown, { user_id: string }>
 
 async function main() {
   const open = new ChatOpenAI({
@@ -10,6 +28,9 @@ async function main() {
       baseURL: "https://ark.cn-beijing.volces.com/api/v3",
       // logLevel: "debug",
     },
+    // temperature: 0,
+    // timeout: 10,
+    // maxTokens: 1000,
   })
   const model = open
 
@@ -19,9 +40,8 @@ async function main() {
     ({ city }) => {
       console.log(`[get_weather] called with city=${city}`)
 
-      // return 10 degrees Celsius and sunny in jiaxing
-      if (city.toLowerCase() === "jiaxing") {
-        return "11 degrees Celsius and rainy."
+      if (city.toLowerCase() === "florida") {
+        return "-11 degrees Celsius and snowy."
       }
 
       return `It's always sunny in ${city}!`
@@ -36,56 +56,58 @@ async function main() {
     },
   )
 
-  const agent = createAgent({
-    model,
-    tools: [getWeather],
-  })
-
-  const resp = await agent.invoke({
-    messages: [msg],
-  })
-  // console.log("resp:", resp)
-  // console.log(
-  //   "resp content:",
-  //   resp.messages.map((x) => `|${x.content}|`),
-  // )
-  // console.log(
-  //   "resp text:",
-  //   resp.messages.map((x) => `|${x.text}|`),
-  // )
-  console.log("\n---\nFinal output:")
-  console.log(
-    resp.messages
-      .filter((x) => x.type === "ai")
-      .map((x) => x.content)
-      .join("\n"),
+  const getUserLocation = tool(
+    (_, config: AgentRuntime) => {
+      const { user_id } = config.context
+      console.log(`[get_user_location] called with user_id=${user_id}`)
+      return user_id === "1" ? "Florida" : "SF"
+    },
+    {
+      name: "get_user_location",
+      description: "Retrieve user information based on user ID",
+    },
   )
 
-  // let full: AIMessageChunk | null = null
+  const responseFormat = z.object({
+    punny_response: z.string(),
+    weather_conditions: z.string().optional(),
+  })
 
-  // for await (const chunk of resp) {
-  //   console.log("chunk:", chunk)
-  //   // full = full ? full.concat(chunk) : chunk
-  //   // full.text && console.log(full.text)
-  //   // console.log(full.text)
-  //   // process.stdout.write(full.text + "\r")
+  const checkpointer = new MemorySaver()
 
-  //   // for (const block of chunk.contentBlocks) {
-  //   //   if (block.type === "reasoning") {
-  //   //     console.log(`Reasoning: ${block.reasoning}`)
-  //   //   } else if (block.type === "tool_call_chunk") {
-  //   //     console.log(`Tool call chunk: ${block}`)
-  //   //   } else if (block.type === "text") {
-  //   //     console.log("text:", block.text)
-  //   //   } else {
-  //   //     // ...
-  //   //     console.error(`Unknown block type: ${block.type}`)
-  //   //   }
-  //   // }
+  const agent = createAgent({
+    model,
+    systemPrompt: systemPrompt,
+    tools: [getUserLocation, getWeather],
+    responseFormat,
+    checkpointer,
+  })
+
+  // `thread_id` is a unique identifier for a given conversation.
+  const config = {
+    configurable: { thread_id: "1" },
+    context: { user_id: "11" },
+  }
+  const response = await agent.invoke(
+    { messages: [{ role: "user", content: "what is the weather outside?" }] },
+    config,
+  )
+  console.log(response.structuredResponse)
+  // {
+  //   punny_response: "Florida is still having a 'sun-derful' day ...",
+  //   weather_conditions: "It's always sunny in Florida!"
   // }
-  // console.log("\n---\nFinal output:")
 
-  // console.log(full?.contentBlocks)
+  // Note that we can continue the conversation using the same `thread_id`.
+  const thankYouResponse = await agent.invoke(
+    { messages: [{ role: "user", content: "thank you!" }] },
+    config,
+  )
+  console.log(thankYouResponse.structuredResponse)
+  // {
+  //   punny_response: "You're 'thund-erfully' welcome! ...",
+  //   weather_conditions: undefined
+  // }
 }
 
 main()
