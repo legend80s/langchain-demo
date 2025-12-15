@@ -2,11 +2,20 @@
   "name": "langchain-demo",
   "module": "index.ts",
   "type": "module",
-  "private": true,
+  "scripts": {
+    "dev": "node --env-file .env index.ts"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
   "peerDependencies": {
     "typescript": "^5"
+  },
+  "dependencies": {
+    "@langchain/community": "^1.1.0",
+    "@langchain/deepseek": "^1.0.3",
+    "@langchain/openai": "^1.2.0",
+    "langchain": "^1.1.5",
+    "zod": "^4.1.13"
   }
 }
