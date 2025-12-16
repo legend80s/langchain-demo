@@ -1,5 +1,4 @@
 import { MemorySaver } from "@langchain/langgraph"
-import { ChatOpenAI } from "@langchain/openai"
 import {
   createAgent,
   HumanMessage,
@@ -8,6 +7,7 @@ import {
   tool,
 } from "langchain"
 import * as z from "zod"
+import { modelWithFunctionCalling } from "./lib/models"
 
 const systemPrompt = `You are an expert weather forecaster, who speaks in puns.
 
@@ -21,19 +21,6 @@ If a user asks you for the weather, make sure you know the location. If you can 
 type AgentRuntime = ToolRuntime<unknown, { user_id: string }>
 
 async function main() {
-  const open = new ChatOpenAI({
-    apiKey: process.env.ARK_API_KEY,
-    model: "doubao-seed-1-6-lite-251015",
-    configuration: {
-      baseURL: "https://ark.cn-beijing.volces.com/api/v3",
-      // logLevel: "debug",
-    },
-    // temperature: 0,
-    // timeout: 10,
-    // maxTokens: 1000,
-  })
-  const model = open
-
   const msg = new HumanMessage("What's the weather in Tokyo?")
 
   const getWeather = tool(
@@ -76,7 +63,7 @@ async function main() {
   const checkpointer = new MemorySaver()
 
   const agent = createAgent({
-    model,
+    model: modelWithFunctionCalling,
     systemPrompt: systemPrompt,
     tools: [getUserLocation, getWeather],
     responseFormat,
